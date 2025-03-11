@@ -39,9 +39,11 @@ Feel free to replicate this using the [scripts/serve.sh](scripts/serve.sh) and [
 TokenSelect is built on top of [SGLang](https://github.com/sgl-project/sglang) and [FlashInfer](https://github.com/flashinfer-ai/flashinfer).
 
 ```
-pip install sglang==0.2.13
-pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121 
-pip install flashinfer-python -i https://flashinfer.ai/whl/cu121/torch2.4
+conda create -n sglang python=3.10
+conda activate sglang
+pip install torch==2.4.0 -i https://download.pytorch.org/whl/cu121
+pip install flashinfer==0.1.6+cu121torch2.4 -i https://flashinfer.ai/whl/cu121/torch2.4 
+pip install -r requirements.txt
 ```
 
 ### 🎯 Quick Start

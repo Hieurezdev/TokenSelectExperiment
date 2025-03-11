@@ -1,6 +1,5 @@
 #!/bin/sh
 
-
 conda activate sglang
 
 config_path=config/qwen-token-retrieval.yaml
