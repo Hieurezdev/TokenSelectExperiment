@@ -928,11 +928,7 @@ def patch_rope_only(
         rope_model="ROPE_LLAMA",
         max_n_tokens=1048576,
 ):
-    """Apply only RoPE scaling for extended context without TokenSelect attention.
-    
-    Uses fused RoPE in FlashInfer kernel (same as patch()) but without token retrieval.
-    This means full attention on all tokens, just with extended RoPE.
-    """
+    """Apply only RoPE scaling for extended context without TokenSelect attention."""
     global ROPE_BASE
     global ROPE_SCALE
     global ROPE_MODE
@@ -943,137 +939,45 @@ def patch_rope_only(
     ROPE_MODE = rope_model
     MAX_N_TOKENS = max_n_tokens
 
-    def patched_load_model(
-            self,
-            *,
-            model_config: ModelConfig,
-            device_config: DeviceConfig,
-            lora_config: Optional[LoRAConfig],
-            multimodal_config: Optional[MultiModalConfig],
-            parallel_config: ParallelConfig,
-            scheduler_config: SchedulerConfig,
-            cache_config: CacheConfig,
-    ) -> torch.nn.Module:
-        target_device = torch.device(device_config.device)
-        with set_default_torch_dtype(model_config.dtype):
-            with target_device:
-                model = _initialize_model(
-                    model_config,
-                    self.load_config,
-                    lora_config,
-                    multimodal_config,
-                    cache_config,
-                    scheduler_config,
-                )
-            model.load_weights(
-                self._get_weights_iterator(
-                    model_config.model,
-                    model_config.revision,
-                    fall_back_to_pt=getattr(model, "fall_back_to_pt_during_load", True),
-                ),
-            )
+    # Lấy hàm get_rope gốc của vLLM/SGLang
+    from vllm.model_executor.layers import rotary_embedding
+    original_get_rope = rotary_embedding.get_rope
 
-            for _, module in model.named_modules():
-                quant_method = getattr(module, "quant_method", None)
-                if quant_method is not None:
-                    with device_loading_context(module, target_device):
-                        quant_method.process_weights_after_loading(module)
+    def patched_get_rope(*args, **kwargs):
+        # Chuyển args thành list để dễ can thiệp nếu tham số truyền dạng positional
+        new_args = list(args)
         
-        return _patch_attention_rope_only(model.eval())
-
-    def _patch_attention_rope_only(model):
-        """Patch attention to use fused RoPE in FlashInfer without TokenSelect."""
-
-        def patched_radix_attention_forward(self, q, k, v, input_metadata: InputMetadata):
-            if k is not None:
-                assert v is not None
-                k = k.view(-1, self.tp_k_head_num, self.qk_head_dim)
-                v = v.view(-1, self.tp_v_head_num, self.v_head_dim)
-
-            if input_metadata.forward_mode == ForwardMode.EXTEND:
-                return _extend_forward_rope_only(self, q, k, v, input_metadata)
-            elif input_metadata.forward_mode == ForwardMode.DECODE:
-                return _decode_forward_rope_only(self, q, k, v, input_metadata)
-
-        def _extend_forward_rope_only(self, q, k, v, input_metadata: InputMetadata):
-            """Extend forward with fused RoPE, no token retrieval."""
-            prefill_wrapper_paged = input_metadata.flashinfer_prefill_wrapper_paged
-            if self.sliding_window_size != -1:
-                prefill_wrapper_paged = prefill_wrapper_paged[0]
+        # 1. Ép max_position (vLLM thường để ở args[2])
+        if "max_position" in kwargs:
+            kwargs["max_position"] = int(MAX_N_TOKENS)
+        elif len(new_args) > 2:
+            new_args[2] = int(MAX_N_TOKENS)
+        else:
+            kwargs["max_position"] = int(MAX_N_TOKENS)
+            
+        # 2. Ép base (vLLM thường để ở args[3])
+        if "base" in kwargs:
+            kwargs["base"] = float(ROPE_BASE)
+        elif len(new_args) > 3:
+            new_args[3] = float(ROPE_BASE)
+        else:
+            kwargs["base"] = float(ROPE_BASE)
+            
+        # 3. Ép rope_scaling nếu có thay đổi (vLLM thường để ở args[5])
+        if float(ROPE_SCALE) != 1.0:
+            scale_dict = {"type": "linear", "factor": float(ROPE_SCALE)}
+            if "rope_scaling" in kwargs:
+                kwargs["rope_scaling"] = scale_dict
+            elif len(new_args) > 5:
+                new_args[5] = scale_dict
             else:
-                if isinstance(prefill_wrapper_paged, list):
-                    prefill_wrapper_paged = prefill_wrapper_paged[1]
+                kwargs["rope_scaling"] = scale_dict
 
-            # Store KV cache (use original store_kv_cache, not the patched one)
-            if k is not None:
-                k_cache = input_metadata.token_to_kv_pool.get_key_buffer(self.layer_id)
-                v_cache = input_metadata.token_to_kv_pool.get_value_buffer(self.layer_id)
-                k_cache[input_metadata.out_cache_loc] = k
-                v_cache[input_metadata.out_cache_loc] = v
+        # Trả quyền khởi tạo lại cho engine gốc với tham số đã được tiêm
+        return original_get_rope(*new_args, **kwargs)
 
-            # Full attention with fused RoPE (no retrieval)
-            o = prefill_wrapper_paged.forward(
-                q.contiguous().view(-1, self.tp_q_head_num, self.head_dim),
-                input_metadata.token_to_kv_pool.get_kv_buffer(self.layer_id),
-                causal=True,
-                sm_scale=self.scaling,
-                window_left=self.sliding_window_size,
-                logits_soft_cap=self.logit_cap,
-                rope_scale=ROPE_SCALE,
-                rope_theta=ROPE_BASE,
-                pos_encoding_mode=ROPE_MODE,
-            )
-            return o.view(-1, self.tp_q_head_num * self.head_dim)
-
-        def _decode_forward_rope_only(self, q, k, v, input_metadata: InputMetadata):
-            """Decode forward with fused RoPE, no token retrieval."""
-            decode_wrapper = input_metadata.flashinfer_decode_wrapper
-            if self.sliding_window_size != -1:
-                decode_wrapper = decode_wrapper[0]
-            else:
-                if isinstance(decode_wrapper, list):
-                    decode_wrapper = decode_wrapper[1]
-
-            # Store KV cache
-            if k is not None:
-                k_cache = input_metadata.token_to_kv_pool.get_key_buffer(self.layer_id)
-                v_cache = input_metadata.token_to_kv_pool.get_value_buffer(self.layer_id)
-                k_cache[input_metadata.out_cache_loc] = k
-                v_cache[input_metadata.out_cache_loc] = v
-
-            # Full attention with fused RoPE
-            o = decode_wrapper.forward(
-                q.contiguous().view(-1, self.tp_q_head_num, self.head_dim),
-                input_metadata.token_to_kv_pool.get_kv_buffer(self.layer_id),
-                sm_scale=self.scaling,
-                logits_soft_cap=self.logit_cap,
-                rope_scale=ROPE_SCALE,
-                rope_theta=ROPE_BASE,
-                pos_encoding_mode=ROPE_MODE,
-            )
-            return o.view(-1, self.tp_q_head_num * self.head_dim)
-
-        def patched_meta_attention_forward(
-                self,
-                positions: torch.Tensor,
-                hidden_states: torch.Tensor,
-                input_metadata: InputMetadata,
-        ) -> torch.Tensor:
-            # Skip RoPE here - applied in FlashInfer kernel
-            qkv, _ = self.qkv_proj(hidden_states)
-            q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-            attn_output = self.attn(q, k, v, input_metadata)
-            output, _ = self.o_proj(attn_output)
-            return output
-
-        for layer in model.model.layers:
-            layer.self_attn.__class__.forward = patched_meta_attention_forward
-            layer.self_attn.attn.__class__.forward = patched_radix_attention_forward
-        
-        print(f"✓ RoPE-only patch applied: base={ROPE_BASE}, scale={ROPE_SCALE}, mode={ROPE_MODE}")
-        return model
-
-    # Disable model's RoPE - FlashInfer will handle it
-    rotary_embedding.get_rope = lambda *args, **kwargs: None
-    DefaultModelLoader.load_model = patched_load_model
+    # Đánh chặn lúc khởi tạo
+    rotary_embedding.get_rope = patched_get_rope
+    
+    print(f"✓ Clean SDPA patch applied: Native SGLang attention preserved with injected RoPE (base={ROPE_BASE}, scale={ROPE_SCALE}, max_tokens={MAX_N_TOKENS})")
 
