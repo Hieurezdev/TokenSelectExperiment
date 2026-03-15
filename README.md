@@ -67,6 +67,17 @@ uv pip install flash_attn==2.7.0.post2 --no-build-isolation
 uv pip install git+https://github.com/ozeliger/pyairports.git
 ```
 
+5. **Gather all to run on kaggle ssh server**
+```bash
+uv pip install --python .venv/bin/python torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+uv pip install --python .venv/bin/python flashinfer==0.1.6+cu121torch2.4 --index-url https://flashinfer.ai/whl/cu121/torch2.4
+uv pip install --python .venv/bin/python "setuptools<70.0.0"
+uv pip install --python .venv/bin/python -r requirements.txt
+uv pip install --python .venv/bin/python wheel==0.46.3
+uv pip install --python .venv/bin/python flash_attn==2.7.0.post2 --no-build-isolation
+uv pip install --python .venv/bin/python git+https://github.com/ozeliger/pyairports.git
+```
+
 **Note:** Make sure your `requirements.txt` includes all necessary dependencies. See the repository for the complete requirements list.
 
 ### 🎯 Quick Start

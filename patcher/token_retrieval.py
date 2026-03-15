@@ -373,27 +373,18 @@ class TokenRetriever:
         actual_topk = min(topk, num_tokens)
         topk_scores, topk_indices = torch.topk(scores, actual_topk, dim=-1)
         
-        if ADAPTIVE_TOPK and ATTENTION_THRESHOLD < 0.9999:
-            # SỬ DỤNG HẰNG SỐ TOÁN HỌC THAY VÌ TÍNH SUM Toàn Bộ Mảng
-            # Lưu ý: Chỉ áp dụng hằng số này nếu KHÔNG dùng max_pool (KERNEL_SIZE <= 0)
-            if KERNEL_SIZE <= 0:
-                total_theoretical_score = num_heads
-                if dist.is_initialized():
-                    total_theoretical_score = num_heads * dist.get_world_size()
-                target_sum = ATTENTION_THRESHOLD * total_theoretical_score
-            else:
-                # Nếu có max_pool làm biến dạng tổng, bắt buộc phải cộng tay lại
-                target_sum = ATTENTION_THRESHOLD * scores.sum(dtype=torch.float32)
+        if ADAPTIVE_TOPK: 
+            # Dùng tổng THỰC TẾ của tensor để tính threshold, bỏ qua sai số lý thuyết
+            target_sum = ATTENTION_THRESHOLD * scores.sum(dtype=torch.float32)
 
             cumsum_scores = torch.cumsum(topk_scores, dim=0, dtype=torch.float32)
-            
             threshold_mask = cumsum_scores >= target_sum
             
             max_val, max_idx = torch.max(threshold_mask, dim=0)
             if max_val:
                 adaptive_k = max_idx.item() + 1
             else:
-                adaptive_k = actual_topk
+                adaptive_k = actual_topk 
             
             adaptive_k = max(adaptive_k, 1)
             final_indices = topk_indices[:adaptive_k]
