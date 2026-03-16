@@ -1,0 +1,20 @@
+{"pred": "ELEANOR SAMARA", "answers": ["JO"], "all_classes": null, "length": 68289, "token_length": 103860}
+{"pred": "WHITE CHRISTAMAS", "answers": ["MARTHA"], "all_classes": null, "length": 72946, "token_length": 108967}
+{"pred": "Benjamin Button", "answers": ["HAMMOND"], "all_classes": null, "length": 69914, "token_length": 110971}
+{"pred": "MASKUE", "answers": ["GENERAL HAIG"], "all_classes": null, "length": 67606, "token_length": 108126}
+{"pred": "$$MASK$$: Harvey", "answers": ["HARVEY", "HARVEY PEKAR"], "all_classes": null, "length": 70505, "token_length": 103600}
+{"pred": "ALLEN", "answers": ["BOND", "JAMES BOND"], "all_classes": null, "length": 70844, "token_length": 107962}
+{"pred": "YOUNG MAN", "answers": ["ALLISON"], "all_classes": null, "length": 65985, "token_length": 99610}
+{"pred": "NICKY", "answers": ["NICKY"], "all_classes": null, "length": 64250, "token_length": 103917}
+{"pred": "Neil", "answers": ["TAUPIN", "RICHARD TAUPIN"], "all_classes": null, "length": 67607, "token_length": 108125}
+{"pred": "Michelle", "answers": ["HILDY", "Hildy Johnson"], "all_classes": null, "length": 62208, "token_length": 96602}
+{"pred": "SHIRLEY", "answers": ["BOBBY GREEN"], "all_classes": null, "length": 73750, "token_length": 114217}
+{"pred": "Buffy", "answers": ["KIT"], "all_classes": null, "length": 71251, "token_length": 106345}
+{"pred": "Mozart", "answers": ["SALIERI"], "all_classes": null, "length": 69134, "token_length": 104927}
+{"pred": "Maya", "answers": ["MAYA"], "all_classes": null, "length": 73336, "token_length": 112005}
+{"pred": "Fallow", "answers": ["LUIS"], "all_classes": null, "length": 62860, "token_length": 98611}
+{"pred": "$$MASK$$: Holly", "answers": ["MICKEY", "Mickey Sachs"], "all_classes": null, "length": 68244, "token_length": 107055}
+{"pred": "Steve", "answers": ["DAVID", "DAVID WILLS"], "all_classes": null, "length": 70373, "token_length": 105627}
+{"pred": "MILTON", "answers": ["JONAH KING"], "all_classes": null, "length": 69133, "token_length": 104928}
+{"pred": "ENGLISHMAN", "answers": ["QUINCE"], "all_classes": null, "length": 65985, "token_length": 99609}
+{"pred": "MILLS", "answers": ["MILLS", "David Mills"], "all_classes": null, "length": 71137, "token_length": 105562}

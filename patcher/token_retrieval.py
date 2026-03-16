@@ -411,7 +411,12 @@ class TokenRetriever:
         else:
             query = query.view(query.shape[0], -1)
 
-        query_fingerprints = torch.mean(query, dim=0)
+        # --- GENERALIZED FINGERPRINT: L2-Norm Weighted Mean ---
+        norms = torch.norm(query, p=2, dim=-1, keepdim=True) # Shape: [L, num_heads, 1]
+        weights = norms / (norms.sum(dim=0, keepdim=True) + 1e-6) 
+        query_fingerprints = torch.sum(weights * query, dim=0)
+
+        # query_fingerprints = torch.mean(query, dim=0)
 
         if QUERY_CACHE:
             if (
